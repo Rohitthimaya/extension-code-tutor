@@ -37,7 +37,10 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const db_1 = require("./db");
+let feedbackTimer;
 function activate(context) {
+    // Start the 10-minute feedback timer when extension activates
+    startFeedbackTimer();
     vscode.chat.createChatParticipant("code-tutor", async (request, chatContext, response, token) => {
         const userQuery = request.prompt;
         const chatModels = await vscode.lm.selectChatModels({ family: 'gpt-4' });
@@ -50,12 +53,11 @@ function activate(context) {
         }
         console.log('Full GPT Response:', fullResponse + "\n");
         // Show prompt and one "Rate" button
-        // ... after receiving and showing the response text
         response.markdown('\n\n**Please rate the response.**'); // two newlines before prompt
         response.button({
             command: 'extension.rateResponse',
             title: 'Rate Response',
-            tooltip: 'Click to rate this response', // no newlines here
+            tooltip: 'Click to rate this response',
             arguments: [userQuery, fullResponse]
         });
         const rateCommand = vscode.commands.registerCommand('extension.rateResponse', async (question, answer) => {
@@ -80,6 +82,46 @@ function activate(context) {
         });
         context.subscriptions.push(rateCommand);
     });
+    // New command to handle feedback comment input from user
+    const commentFeedbackCommand = vscode.commands.registerCommand('extension.commentFeedback', async () => {
+        const comment = await vscode.window.showInputBox({
+            placeHolder: 'Please enter your feedback comment here',
+            prompt: 'We appreciate your feedback!'
+        });
+        if (comment) {
+            try {
+                await (0, db_1.sendCommentFeedbackToDatabase)({
+                    user_comment: comment,
+                    user_id: null,
+                    session_id: null
+                });
+                vscode.window.showInformationMessage('Thanks for your feedback comment!');
+            }
+            catch (err) {
+                console.error('❌ Comment feedback send error:', err);
+                vscode.window.showErrorMessage('Failed to send feedback comment');
+            }
+        }
+    });
+    context.subscriptions.push(commentFeedbackCommand);
+    // Function to start/reset the 10-minute timer
+    function startFeedbackTimer() {
+        if (feedbackTimer) {
+            clearTimeout(feedbackTimer);
+        }
+        feedbackTimer = setTimeout(() => {
+            vscode.window.showInformationMessage('Please provide your feedback for this extension.', 'Provide Feedback')
+                .then(selection => {
+                if (selection === 'Provide Feedback') {
+                    vscode.commands.executeCommand('extension.commentFeedback');
+                }
+            });
+        }, 10000); // 10 minutes in ms
+    }
 }
-function deactivate() { }
+function deactivate() {
+    if (feedbackTimer) {
+        clearTimeout(feedbackTimer);
+    }
+}
 //# sourceMappingURL=extension.js.map
