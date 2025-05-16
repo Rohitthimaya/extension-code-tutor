@@ -1,63 +1,56 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { sendFeedbackToDatabase } from './db'; // Import your database function
+import { sendFeedbackToDatabase } from './db';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	vscode.chat.createChatParticipant("code-tutor", async (request, chatContext, response, token) => {
-		// string that user entered
 		const userQuery = request.prompt;
+		const chatModels = await vscode.lm.selectChatModels({ family: 'gpt-4' });
 
-		const chatModels = await vscode.lm.selectChatModels({ family: 'gpt-4' })
-
-		const messages = [
-			vscode.LanguageModelChatMessage.User(userQuery)
-		]
+		const messages = [vscode.LanguageModelChatMessage.User(userQuery)];
 		const chatRequest = await chatModels[0].sendRequest(messages, undefined, token);
-		// Initialize a variable to store the full response text
+
 		let fullResponse = '';
-
-		// Collect the response as it comes in
 		for await (const token of chatRequest.text) {
-			// Append each chunk of text to the full response
 			fullResponse += token;
-
-			// Update the response in the chat (this will show incrementally)
 			response.markdown(token);
 		}
 
-		// Log the full GPT response once it's complete
-		console.log('Full GPT Response:', fullResponse);
+		console.log('Full GPT Response:', fullResponse + "\n");
 
-		// Add feedback buttons after response
+		// Show prompt and one "Rate" button
+		// ... after receiving and showing the response text
+		response.markdown('\n\n**Please rate the response.**');  // two newlines before prompt
+
 		response.button({
-			command: 'extension.sendFeedback',
-			title: '👍',
-			arguments: [userQuery, fullResponse, 'positive']
-		});
-		response.button({
-			command: 'extension.sendFeedback',
-			title: '👎',
-			arguments: [userQuery, fullResponse, 'negative']
+			command: 'extension.rateResponse',
+			title: 'Rate Response',
+			tooltip: 'Click to rate this response',  // no newlines here
+			arguments: [userQuery, fullResponse]
 		});
 
-		let feedbackCommand = vscode.commands.registerCommand('extension.sendFeedback', async (question, fullResponse, rating) => {
-			console.log('🧪 Feedback button clicked', { question, rating, fullResponse }); // Confirm click
-			try {
-				await sendFeedbackToDatabase({ question, response: fullResponse, rating });
-				vscode.window.showInformationMessage('Thanks for your feedback!');
-			} catch (err) {
-				console.error('❌ Feedback send error:', err);
-				vscode.window.showErrorMessage('Failed to send feedback');
+
+		const rateCommand = vscode.commands.registerCommand('extension.rateResponse', async (question: string, answer: string) => {
+			const ratings = ['1', '2', '3', '4', '5'];
+			const selected = await vscode.window.showQuickPick(ratings, {
+				placeHolder: 'Rate this response (1 = Very Satisfied, 2 = Satisfied, 3 = Neutral, 4 = Dissatisfied, 5 = Very Dissatisfied)'
+			});
+			if (selected) {
+				try {
+					await sendFeedbackToDatabase({
+						question,
+						response: answer,
+						rating: parseInt(selected)
+					});
+					vscode.window.showInformationMessage(`Thanks for your feedback! You rated: ${selected}`);
+				} catch (err) {
+					console.error('❌ Feedback send error:', err);
+					vscode.window.showErrorMessage('Failed to send feedback');
+				}
 			}
 		});
 
-		context.subscriptions.push(feedbackCommand); // Use the outer context for subscriptions
-	})
+		context.subscriptions.push(rateCommand);
+	});
 }
 
-
-// This method is called when your extension is deactivated
 export function deactivate() { }

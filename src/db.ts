@@ -7,7 +7,7 @@ const pool = new Pool({
   }
 });
 
-// Confirm DB connection at startup
+// Confirm DB connection
 pool.connect()
   .then(client => {
     console.log('✅ Connected to the database successfully');
@@ -20,12 +20,12 @@ pool.connect()
 export async function sendFeedbackToDatabase(data: {
   question: string,
   response: string,
-  rating: 'positive' | 'negative',
+  rating: number,
   user_id?: string,
   session_id?: string,
   response_time?: number
 }) {
-  console.log('📤 Sending feedback to database:', data); // Log feedback data
+  console.log('📤 Sending feedback to database:', data);
   await pool.query(
     `INSERT INTO feedback (question, response, rating, user_id, session_id, response_time)
      VALUES ($1, $2, $3, $4, $5, $6)`,

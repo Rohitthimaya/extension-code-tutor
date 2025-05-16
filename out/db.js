@@ -8,7 +8,7 @@ const pool = new pg_1.Pool({
         rejectUnauthorized: false
     }
 });
-// Confirm DB connection at startup
+// Confirm DB connection
 pool.connect()
     .then(client => {
     console.log('✅ Connected to the database successfully');
@@ -18,7 +18,7 @@ pool.connect()
     console.error('❌ Failed to connect to the database:', err);
 });
 async function sendFeedbackToDatabase(data) {
-    console.log('📤 Sending feedback to database:', data); // Log feedback data
+    console.log('📤 Sending feedback to database:', data);
     await pool.query(`INSERT INTO feedback (question, response, rating, user_id, session_id, response_time)
      VALUES ($1, $2, $3, $4, $5, $6)`, [
         data.question,
